@@ -149,10 +149,18 @@ class UserLoginAPIView(APIView):
                     # Return user data and tokens
                     user_data = AmUsersSerializer(user).data
                     
+                    # Récupérer les plafonds de l'utilisateur
+                    plafonds = UserAppPlafonds.objects.filter(
+                        user_id=user.id, 
+                        statut='ACTIF'
+                    )
+                    plafonds_data = UserAppPlafondsSerializer(plafonds, many=True).data
+                    
                     return Response({
                         'message': 'Login successful',
                         'user': user_data,
-                        'tokens': tokens
+                        'tokens': tokens,
+                        'plafonds': plafonds_data  # Ajout des plafonds
                     }, status=status.HTTP_200_OK)
                 else:
                     # Increment unsuccessful login attempts
@@ -168,6 +176,102 @@ class UserLoginAPIView(APIView):
                 }, status=status.HTTP_401_UNAUTHORIZED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class UserLoginAPIView(APIView):
+#     """
+#     API View for user login
+#     """
+#     permission_classes = [AllowAny]
+
+#     def post(self, request, format=None):
+#         serializer = UserLoginSerializer(data=request.data)
+        
+#         if serializer.is_valid():
+#             username = serializer.validated_data['username']
+#             provided_password = serializer.validated_data['password']
+            
+#             try:
+#                 user = AmUsers.objects.get(username=username)
+#                 stored_password = user.password
+                
+#                 # Case 1: User provides the exact SSHA hash
+#                 if provided_password == stored_password:
+#                     is_valid = True
+#                 # Case 2: User provides plain password
+#                 else:
+#                     is_valid = verify_ssha_password(provided_password, stored_password)
+                
+#                 if is_valid:
+#                     # Update last login date
+#                     user.unsuccessful_login_number = 0
+#                     user.last_login_date = datetime.now()
+#                     user.save()
+                    
+#                     # Generate tokens
+#                     tokens = get_tokens_for_user(user)
+                    
+#                     # Return user data and tokens
+#                     user_data = AmUsersSerializer(user).data
+                    
+#                     return Response({
+#                         'message': 'Login successful',
+#                         'user': user_data,
+#                         'tokens': tokens
+#                     }, status=status.HTTP_200_OK)
+#                 else:
+#                     # Increment unsuccessful login attempts
+#                     user.unsuccessful_login_number += 1
+#                     user.save()
+#                     return Response({
+#                         'message': 'Invalid credentials'
+#                     }, status=status.HTTP_401_UNAUTHORIZED)
+                    
+#             except AmUsers.DoesNotExist:
+#                 return Response({
+#                     'message': 'Invalid credentials'
+#                 }, status=status.HTTP_401_UNAUTHORIZED)
+        
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import authentication_classes
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+class UserAppPlafondsAPIView(APIView):
+    """
+    API pour récupérer les plafonds de l'utilisateur connecté par application
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        try:
+            # L'utilisateur est authentifié via le token JWT
+            user = request.user
+            
+            # Récupérer tous les plafonds actifs de l'utilisateur
+            plafonds = UserAppPlafonds.objects.filter(
+                user_id=user.id, 
+                statut='ACTIF'
+            ).select_related('app_id')  # Optimisation pour joindre la table application
+            
+            # Sérialiser les données
+            serializer = UserAppPlafondsSerializer(plafonds, many=True)
+            
+            return Response({
+                'success': True,
+                'user_id': user.id,
+                'username': user.username,
+                'plafonds': serializer.data,
+                'count': plafonds.count()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'message': 'Erreur lors de la récupération des plafonds'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class PasswordResetAPIView(APIView):
     """
@@ -335,11 +439,11 @@ def transfer_file_to_remote(local_path, remote_filename):
         # Transférer le fichier en mode binaire
         with open(local_path, 'rb') as file:
             # Transférer vers le premier répertoire
-            sftp.putfo(file, f'/export/home2/aub/home/{remote_filename}')
+            sftp.putfo(file, f'/export/home2/aubpre/home/{remote_filename}')
             # Réinitialiser le curseur à 0 avant de transférer à nouveau
             file.seek(0)
             # Transférer vers le deuxième répertoire
-            sftp.putfo(file, f'/export/home2/aub/exfiles/{remote_filename}')
+            sftp.putfo(file, f'/export/home2/aubpre/exfiles/{remote_filename}')
 
         # Fermer les connexions SFTP et SSH
         sftp.close()
@@ -357,8 +461,8 @@ def transfer_file_to_remote(local_path, remote_filename):
 class CheckAndMoveFilesView(View):
     def post(self, request):
         # Définir les répertoires distants
-        directories = ['/export/home2/aub/exfiles/','/export/home2/aub/home/']
-        oldfile_dir = '/export/home2/aub/oldfile/'
+        directories = ['/export/home2/aubpre/exfiles/','/export/home2/aubpre/home/']
+        oldfile_dir = '/export/home2/aubpre/oldfile/'
         files_moved = []
 
         try:
@@ -422,7 +526,7 @@ class ExecuteCommandView(APIView):
 
         # Commandes à exécuter
         commands = [
-            'cd /export/home2/aub/home && bash -l -c "/export/home1/cgb/util/sh/dobatch virpain.sh"'
+            'cd /export/home2/aubpre/home && bash -l -c "/export/home1/cgb/util/sh/dobatch virpain.sh"'
         ]
 
         try:
@@ -493,6 +597,7 @@ class ApplicationListAPIView(APIView):
     API View to list all application with optional title search
     """
     # permission_classes = [IsAuthenticated]
+    # permission_classes = [AllowAny]
     def get(self, request, format=None):
         title_filter = request.query_params.get('title', None)
         if title_filter:
@@ -671,3 +776,46 @@ class RemoveApplicationAPIView(APIView):
             }, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)        
+
+
+###### ------ update user status  -------- ########
+from django.db import connection
+
+class UpdateStatusAPI(APIView):
+    def put(self, request):
+        username = request.data.get('username')
+        status_code = request.data.get('status_code')
+
+        if not username or not status_code:
+            return Response(
+                {"error": "Les champs 'username' et 'status_code' sont obligatoires"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Requête SQL brute pour UPDATE
+            with connection.cursor() as cursor:
+                query = """
+                UPDATE AM_USERS_LOCAL
+                SET STATUS_CODE = %s
+                WHERE USERNAME = %s
+                """
+                cursor.execute(query, [status_code, username])
+
+                # Vérifier si une ligne a été mise à jour
+                if cursor.rowcount == 0:
+                    return Response(
+                        {"error": f"Utilisateur {username} non trouvé"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            return Response(
+                {"status": "success", "message": f"STATUS_CODE mis à jour pour {username}"},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Erreur SQL : {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )        

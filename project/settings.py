@@ -13,15 +13,22 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
+from dotenv import load_dotenv
+import requests
+
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&eftj=57kl6f5@c18q0t12-@f)s$pt-$ew+e&l*ho8m2=%rv%u'
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.environ.get('DEBUG')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -54,6 +61,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'aubstream.middleware.SwitchDatabaseMiddleware', # Ajoutez votre middleware ici
 
 ]
 
@@ -79,25 +87,58 @@ WSGI_APPLICATION = 'project.wsgi.application'
 CORS_ALLOWED_ORIGINS = [
       "http://localhost:5174",
       "http://localhost:5173",
+      "http://10.99.1.2:5173",
+      "http://10.99.1.2:5174",
+      "http://aubstream:9060",
   ]
 CORS_ALLOW_CREDENTIALS = True
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
 DATABASES = {
-    'default': {
+    'default': {   # DOIT TOUJOURS ÊTRE REMPLI
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    },
+    'oracle': {
         'ENGINE': 'django.db.backends.oracle',
-        'NAME': '192.168.10.14:1521/ORCL',  # Format: 'host:port/SID'
-        'USER': 'SYSTEM',
-        'PASSWORD': 'aub2025**',
-        'OPTIONS': {
-            'threaded': True,
-            'encoding': 'UTF-8',
-            'nencoding': 'UTF-8',
-        },
+        'NAME': os.environ.get('DATABASE_NAME'),
+        'USER': os.environ.get('DATABASE_USER'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
+    },
+    'PROD': {
+        'ENGINE': 'django.db.backends.oracle',
+        'NAME': os.environ.get('DATABASE_NAME'),
+        'USER': os.environ.get('DATABASE_USER'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
     }
 }
+
+
+
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.oracle',
+#         'NAME': '192.168.10.14:1521/ORCL',  # Format: 'host:port/SID'
+#         'USER': 'SYSTEM',
+#         'PASSWORD': 'aub2025**',
+#         'OPTIONS': {
+#             'threaded': True,
+#             'encoding': 'UTF-8',
+#             'nencoding': 'UTF-8',
+#         },
+#     }
+# }
 
 
 # Password validation
@@ -135,6 +176,18 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = 'smtp.gmail.com'
+#Production
+EMAIL_HOST_USER = 'aubnet@aub.mr'
+#EMAIL_HOST_PASSWORD = 'oxjm odqg bbpd bqbq'
+EMAIL_HOST_PASSWORD = 'cpyq rnue suib ibyt'
+EMAIL_USE_SSL = True
+EMAIL_PORT = '465'
+EMAIL_TIMEOUT = 30  # Timeout de 30 secondes
+# rrjr tdgy lxuf ktii
+
+
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
@@ -143,8 +196,13 @@ STATICFILES_DIRS = [
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
+# settings.py
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Créer le répertoire Transfer s'il n'existe pas
+TRANSFER_DIR = os.path.join(MEDIA_ROOT, 'Transfer')
+os.makedirs(TRANSFER_DIR, exist_ok=True)
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -156,31 +214,44 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #     ],
 # }
 
-# SIMPLE_JWT = {
-#     'AUTH_HEADER_TYPES': ('Bearer',),
-#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-#     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-# }
 
-# AUTHENTICATION_BACKENDS = [
-#     'aubstream.backends.CustomAuthBackend',
-#     'django.contrib.auth.backends.ModelBackend',
-# ]
 
-# settings.py
-# AUTH_USER_MODEL = 'aubstream.AmUsersLocal'
-# AUTHENTICATION_BACKENDS = ['aubstream.backends.CustomAuthBackend']
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": False,
 
-# # Désactiver les vérifications de permissions si non nécessaires
-# SIMPLE_JWT = {
-#     'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-# }
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": "",
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "JSON_ENCODER": None,
+    "JWK_URL": None,
+    "LEEWAY": 0,
 
-# SIMPLE_JWT = {
-#     'USER_ID_FIELD': 'username',  # Utilise le champ username comme identifiant
-#     'USER_ID_CLAIM': 'user_id',
-# }
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
 
-# MIGRATION_MODULES = {
-#     'aubstream': None,  # Désactive les migrations pour cette app
-# }
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+
+    "JTI_CLAIM": "jti",
+
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=1),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+
+    "TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainPairSerializer",
+    "TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSerializer",
+    "TOKEN_VERIFY_SERIALIZER": "rest_framework_simplejwt.serializers.TokenVerifySerializer",
+    "TOKEN_BLACKLIST_SERIALIZER": "rest_framework_simplejwt.serializers.TokenBlacklistSerializer",
+    "SLIDING_TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainSlidingSerializer",
+    "SLIDING_TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer",
+}
