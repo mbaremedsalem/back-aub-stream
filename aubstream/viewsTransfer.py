@@ -849,6 +849,7 @@ def get_transfer_timeline_stats(request):
             'details': str(e)
         }, status=500)
 
+
 @api_view(['PUT'])
 def update_transfer(request, transfer_id):
     try:
@@ -864,7 +865,7 @@ def update_transfer(request, transfer_id):
             transfer = cursor.fetchone()
             if not transfer:
                 return Response({'error': 'Transfert non trouvé'}, status=404)
-            
+
             current_file_path = transfer[1]
 
         # Gestion du fichier
@@ -888,7 +889,7 @@ def update_transfer(request, transfer_id):
         update_fields = ["PLAFOND = 4"]  # Ajout direct du plafond
 
         params = {'transfer_id': transfer_id}
-        
+
         # Liste des champs modifiables
         updatable_fields = [
             'nom_chargeur', 'montant_en_lettre', 'devise', 'montant_chiffre',
@@ -897,13 +898,13 @@ def update_transfer(request, transfer_id):
             'code_swift_banque_beneficiaire', 'nom_banque_intermediaire',
             'code_swift_banque_intermediaire', 'id_client', 'type_client', 'status'
         ]
-        
+
         # Ajouter seulement les champs fournis dans la requête
         for field in updatable_fields:
             if field in data:
                 update_fields.append(f"{field.upper()} = :{field}")
                 params[field] = data[field] if field != 'montant_chiffre' else float(data[field])
-        
+
         # Ajouter le fichier si modifié
         if files or 'file_path' in data:
             update_fields.append("FILES = :file_path")
@@ -956,6 +957,115 @@ def update_transfer(request, transfer_id):
             'details': str(e),
             'type': type(e).__name__
         }, status=500)
+
+
+# @api_view(['PUT'])
+# def update_transfer(request, transfer_id):
+#     try:
+#         data = request.POST.dict()
+#         files = request.FILES.get('files')
+
+#         # Vérification que le transfert existe
+#         with connection.cursor() as cursor:
+#             cursor.execute(
+#                 "SELECT ID_TRANSFER, FILES FROM TRANSFER WHERE ID_TRANSFER = :transfer_id",
+#                 {'transfer_id': transfer_id}
+#             )
+#             transfer = cursor.fetchone()
+#             if not transfer:
+#                 return Response({'error': 'Transfert non trouvé'}, status=404)
+            
+#             current_file_path = transfer[1]
+
+#         # Gestion du fichier
+#         file_path = current_file_path  # Conserver le fichier existant par défaut
+#         if files:
+#             fs = FileSystemStorage(location='media/Transfer')
+#             # Supprimer l'ancien fichier s'il existe
+#             if current_file_path:
+#                 try:
+#                     fs.delete(current_file_path)
+#                 except:
+#                     pass
+#             # Sauvegarder le nouveau fichier
+#             filename = f"transfer_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{files.name}"
+#             saved_file = fs.save(filename, files)
+#             file_path = f"Transfer/{saved_file}"
+
+#         # Construction dynamique de la requête SQL
+#         # update_fields = []
+#         # Construction de la requête SQL avec PLAFOND fixé à 4
+#         update_fields = ["PLAFOND = 4"]  # Ajout direct du plafond
+
+#         params = {'transfer_id': transfer_id}
+        
+#         # Liste des champs modifiables
+#         updatable_fields = [
+#             'nom_chargeur', 'montant_en_lettre', 'devise', 'montant_chiffre',
+#             'frais_MRU', 'frais_etranger', 'observation', 'nom_beneficiaire',
+#             'adresse_beneficiaire', 'iban_beneficiaire', 'nom_banque_beneficiaire',
+#             'code_swift_banque_beneficiaire', 'nom_banque_intermediaire',
+#             'code_swift_banque_intermediaire', 'id_client', 'type_client', 'status'
+#         ]
+        
+#         # Ajouter seulement les champs fournis dans la requête
+#         for field in updatable_fields:
+#             if field in data:
+#                 update_fields.append(f"{field.upper()} = :{field}")
+#                 params[field] = data[field] if field != 'montant_chiffre' else float(data[field])
+        
+#         # Ajouter le fichier si modifié
+#         if files or 'file_path' in data:
+#             update_fields.append("FILES = :file_path")
+#             params['file_path'] = file_path
+
+#         if not update_fields:
+#             return Response({'error': 'Aucun champ à mettre à jour'}, status=400)
+
+#         # Exécution de la mise à jour
+#         with connection.cursor() as cursor:
+#             sql = f"""
+#                 UPDATE TRANSFER SET
+#                 {', '.join(update_fields)}
+#                 WHERE ID_TRANSFER = :transfer_id
+#             """
+#             cursor.execute(sql, params)
+
+#             # Insertion dans l'historique
+#             cursor.execute(
+#                 """
+#                 INSERT INTO HISTORIQUE_TRANSFER
+#                 (TRANSFER_ID, USER_ID, ACTION_TYPE, OBSERVATION, STATUS)
+#                 VALUES (:transfer_id, :user_id, 'MODIFICATION', :observation, :status)
+#                 """,
+#                 {
+#                     'transfer_id': transfer_id,
+#                     'user_id': int(data.get('created_by_id', 0)),
+#                     'observation': data.get('observation_historique', 'Mise à jour partielle du transfert'),
+#                     'status': data.get('status', 'EN_ATTENTE')
+#                 }
+#             )
+
+#         return Response({
+#             'success': True,
+#             'transfer_id': transfer_id,
+#             'message': 'Transfert mis à jour avec succès',
+#             'updated_fields': update_fields,
+#             'file_updated': bool(files or 'file_path' in data)
+#         }, status=200)
+
+#     except Exception as e:
+#         if 'file_path' in locals() and file_path and file_path != current_file_path:
+#             try:
+#                 fs = FileSystemStorage()
+#                 fs.delete(file_path)
+#             except:
+#                 pass
+#         return Response({
+#             'error': 'Erreur lors de la mise à jour',
+#             'details': str(e),
+#             'type': type(e).__name__
+#         }, status=500)
 
 @api_view(['GET'])
 def get_transfer_by_id(request, transfer_id):
@@ -1195,108 +1305,6 @@ def get_transfer_file(request, transfer_id):
             content_type='text/plain'
         )    
 
-
-# @api_view(['POST'])
-# @csrf_exempt
-# def approve_transfer1(request, transfer_id):
-#     """
-#     Ajoute le POID de l'utilisateur au plafond du transfert, ajoute une observation,
-#     incrémente current_approval_level, et met à jour le status selon la logique métier.
-#     """
-#     try:
-#         user_id = request.data.get('user_id')
-#         observation = request.data.get('observation', '')
-#         if not user_id:
-#             return Response({'error': 'user_id requis'}, status=400)
-        
-#         with connection.cursor() as cursor:
-#             # Vérifier si l'utilisateur a déjà approuvé ce transfert
-#             cursor.execute("""
-#                 SELECT COUNT(*) FROM HISTORIQUE_TRANSFER 
-#                 WHERE TRANSFER_ID = :transfer_id AND USER_ID = :user_id AND ACTION_TYPE = 'APPROBATION'
-#             """, {
-#                 'transfer_id': int(transfer_id),
-#                 'user_id': int(user_id)
-#             })
-#             existing_approval = cursor.fetchone()[0]
-            
-#             if existing_approval > 0:
-#                 return Response({'error': 'Vous avez déjà ajouté votre avis sur ce transfert'}, status=400)
-
-#             # Récupérer le POID de l'utilisateur
-#             cursor.execute("SELECT POID FROM AM_USERS_LOCAL WHERE ID = :user_id", {'user_id': int(user_id)})
-#             user_row = cursor.fetchone()
-#             if not user_row:
-#                 return Response({'error': 'Utilisateur non trouvé'}, status=404)
-#             poid = user_row[0]
-            
-#             # Récupérer plafond et current_approval_level actuels du transfert
-#             cursor.execute("SELECT PLAFOND, CURRENT_APPROVAL_LEVEL FROM TRANSFER WHERE ID_TRANSFER = :transfer_id", {'transfer_id': int(transfer_id)})
-#             plafond_row = cursor.fetchone()
-#             if not plafond_row:
-#                 return Response({'error': 'Transfert non trouvé'}, status=404)
-#             plafond = plafond_row[0] or 0
-#             current_approval_level = plafond_row[1] or 0
-            
-#             # Ajouter le poid, sans dépasser 128
-#             new_plafond = plafond + poid
-#             if new_plafond > 128:
-#                 new_plafond = 128
-                
-#             # Incrémenter le niveau d'approbation
-#             new_approval_level = current_approval_level + 1
-            
-#             # Déterminer le statut
-#             if new_plafond == 128:
-#                 status = 'VALIDE'
-#             else:
-#                 status = 'EN_ATTENTE'
-                
-#             # Mettre à jour le transfert
-#             cursor.execute("""
-#                 UPDATE TRANSFER SET PLAFOND = :new_plafond, observation = :observation, 
-#                 current_approval_level = :new_approval_level, status = :status 
-#                 WHERE ID_TRANSFER = :transfer_id
-#             """, {
-#                 'new_plafond': new_plafond,
-#                 'observation': observation,
-#                 'new_approval_level': new_approval_level,
-#                 'status': status,
-#                 'transfer_id': int(transfer_id)
-#             })
-
-#             # Insertion dans l'historique pour l'approbation
-#             cursor.execute(
-#                 """
-#                 INSERT INTO HISTORIQUE_TRANSFER
-#                 (TRANSFER_ID, USER_ID, ACTION_TYPE, OBSERVATION, PLAFOND, CURRENT_APPROVAL_LEVEL, STATUS)
-#                 VALUES (:transfer_id, :user_id, :action_type, :observation, :plafond, :current_approval_level, :status)
-#                 """,
-#                 {
-#                     'transfer_id': int(transfer_id),
-#                     'user_id': int(user_id),
-#                     'action_type': 'APPROBATION',
-#                     'observation': observation,
-#                     'plafond': new_plafond,
-#                     'current_approval_level': new_approval_level,
-#                     'status': status
-#                 }
-#             )
-#             # Commit explicite pour garantir l'insertion
-#             connection.commit()
-        
-#         return Response({
-#             'success': True,
-#             'transfer_id': transfer_id,
-#             'new_plafond': new_plafond,
-#             'current_approval_level': new_approval_level,
-#             'status': status
-#         })
-#     except Exception as e:
-#         return Response({'error': str(e)}, status=500)
-
-
-
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
@@ -1315,27 +1323,77 @@ def approve_transfer(request, transfer_id):
         observation = request.data.get('observation', '')
         if not user_id:
             return Response({'error': 'user_id requis'}, status=400)
-        
+
         with connection.cursor() as cursor:
+               # new update ici medos!
+
+            cursor.execute("""
+                SELECT USER_ID, ACTION_DATE, ACTION_TYPE
+                FROM (
+                    SELECT USER_ID, ACTION_DATE, ACTION_TYPE
+                    FROM HISTORIQUE_TRANSFER
+                    ORDER BY ACTION_DATE DESC
+                )
+                WHERE ROWNUM = 1
+            """)
+
+            dernier_enregistrement = cursor.fetchone()  # Utiliser fetchone() au lieu de fetchall()
+
+            print("------------- decision ------------------------")
+            print("dernier_enregistrement : ", dernier_enregistrement)
+            print("ACTION_TYPE : ", dernier_enregistrement[2])
+            print("------------- decision ------------------------")
+
+            print("---------------------------------------------------------")
+            if dernier_enregistrement:
+                dernier_user_id = dernier_enregistrement[0]  # Premier élément = USER_ID
+                print("dernier_user_id : ", dernier_user_id)
+            else:
+                print("Aucun enregistrement trouvé")
+                dernier_user_id = None
+
+            print("user_id actuel : ", user_id)
+            print("---------------------------------------------------------")
+
+            if dernier_enregistrement and dernier_user_id == int(user_id):
+                action_type = dernier_enregistrement[2]
+
+                if action_type == 'REJET':
+                    return Response({
+                        'error': 'Vous avez déjà rejeté ce dossier',
+                        'code': 'ACTION_DUPLIQUEE'
+                    }, status=400)
+                else:
+                    return Response({
+                        'error': 'Vous avez déjà validé ce dossier',
+                        'code': 'ACTION_DUPLIQUEE'
+                    }, status=400)
+        #         return Response({
+        #     'error': 'Vous avez déjà validé ce dossier',
+        #     'code': 'ACTION_DUPLIQUEE'
+        # }, status=400)
+
+            # fin update ici medos
+
             # Vérifier si l'utilisateur a déjà donné son avis sur ce transfert
             cursor.execute("""
-                SELECT COUNT(*) 
-                FROM HISTORIQUE_TRANSFER 
+                SELECT COUNT(*)
+                FROM HISTORIQUE_TRANSFER
                 WHERE TRANSFER_ID = :transfer_id AND USER_ID = :user_id AND ACTION_TYPE = 'APPROBATION'
             """, {
                 'transfer_id': int(transfer_id),
                 'user_id': int(user_id)
             })
             existing_approval_count = cursor.fetchone()[0]
-            
+
             # Vérifier si le transfert a déjà été rejeté
             cursor.execute("""
-                SELECT COUNT(*) 
-                FROM HISTORIQUE_TRANSFER 
+                SELECT COUNT(*)
+                FROM HISTORIQUE_TRANSFER
                 WHERE TRANSFER_ID = :transfer_id AND ACTION_TYPE = 'REJET'
             """, {'transfer_id': int(transfer_id)})
             existing_rejection_count = cursor.fetchone()[0]
-            
+
             # Bloquer si l'utilisateur a déjà approuvé ET que le transfert n'a jamais été rejeté
             if existing_approval_count > 0 and existing_rejection_count == 0:
                 return Response({
@@ -1343,16 +1401,18 @@ def approve_transfer(request, transfer_id):
                     'code': 'ALREADY_APPROVED'
                 }, status=400)
 
+
+
             # Récupérer le POID, agence, et POST de l'utilisateur
             cursor.execute("""
-                SELECT POID, BRANCH_CODE, POST 
-                FROM AM_USERS_LOCAL 
+                SELECT POID, BRANCH_CODE, POST
+                FROM AM_USERS_LOCAL
                 WHERE ID = :user_id
             """, {'user_id': int(user_id)})
             user_row = cursor.fetchone()
             if not user_row:
                 return Response({'error': 'Utilisateur non trouvé'}, status=404)
-            
+
             poid = user_row[0]
             user_agence = user_row[1]
             post_user = user_row[2]
@@ -1368,17 +1428,17 @@ def approve_transfer(request, transfer_id):
                 poid_next_validateur = 92
             else:
                 poid_next_validateur = 4  # Par défaut
-            
+
             # Récupérer les données du transfert
             cursor.execute("""
-                SELECT PLAFOND, CURRENT_APPROVAL_LEVEL, REF_FAC 
-                FROM TRANSFER 
+                SELECT PLAFOND, CURRENT_APPROVAL_LEVEL, REF_FAC
+                FROM TRANSFER
                 WHERE ID_TRANSFER = :transfer_id
             """, {'transfer_id': int(transfer_id)})
             plafond_row = cursor.fetchone()
             if not plafond_row:
                 return Response({'error': 'Transfert non trouvé'}, status=404)
-            
+
             plafond = plafond_row[0] or 0
             current_approval_level = plafond_row[1] or 0
             ref_fac = plafond_row[2]
@@ -1402,8 +1462,8 @@ def approve_transfer(request, transfer_id):
 
                 # Enregistrer le chemin dans la base
                 cursor.execute("""
-                    UPDATE TRANSFER 
-                    SET FILESSWIFT = :chemin_fichier 
+                    UPDATE TRANSFER
+                    SET FILESSWIFT = :chemin_fichier
                     WHERE ID_TRANSFER = :transfer_id
                 """, {
                     'chemin_fichier': chemin_fichier,
@@ -1412,11 +1472,11 @@ def approve_transfer(request, transfer_id):
 
             # Mise à jour du transfert
             cursor.execute("""
-                UPDATE TRANSFER 
-                SET PLAFOND = :new_plafond, 
-                    observation = :observation, 
-                    current_approval_level = :new_approval_level, 
-                    status = :status 
+                UPDATE TRANSFER
+                SET PLAFOND = :new_plafond,
+                    observation = :observation,
+                    current_approval_level = :new_approval_level,
+                    status = :status
                 WHERE ID_TRANSFER = :transfer_id
             """, {
                 'new_plafond': new_plafond,
@@ -1445,8 +1505,8 @@ def approve_transfer(request, transfer_id):
             validateurs_suivants = []
             if status == 'EN_ATTENTE':
                 cursor.execute("""
-                    SELECT ID, EMAIL, FULLNAME, USERNAME, POST 
-                    FROM AM_USERS_LOCAL 
+                    SELECT ID, EMAIL, FULLNAME, USERNAME, POST
+                    FROM AM_USERS_LOCAL
                     WHERE POID = :poid AND BRANCH_CODE = :branch_code
                 """, {
                     'poid': poid_next_validateur,
@@ -1456,8 +1516,8 @@ def approve_transfer(request, transfer_id):
 
                 if not validateurs_suivants:
                     cursor.execute("""
-                        SELECT ID, EMAIL, FULLNAME, USERNAME, POST 
-                        FROM AM_USERS_LOCAL 
+                        SELECT ID, EMAIL, FULLNAME, USERNAME, POST
+                        FROM AM_USERS_LOCAL
                         WHERE POID = :poid
                     """, {'poid': poid_next_validateur})
                     validateurs_suivants = cursor.fetchall()
@@ -1504,7 +1564,6 @@ def approve_transfer(request, transfer_id):
 
 
 #-------------------------- 2nd choix : -------
-
 @api_view(['POST'])
 @csrf_exempt
 def reject_transfer(request, transfer_id):
@@ -1514,31 +1573,76 @@ def reject_transfer(request, transfer_id):
     Envoie une notification par email au créateur du transfert.
     """
     try:
+        print("ici ici ici !!!!!!!!!!!!!!!!!!!!!!!----")
+
         user_id = request.data.get('user_id')
         observation = request.data.get('observation', '')
         if not user_id:
             return Response({'error': 'user_id requis'}, status=400)
-        
+
         with connection.cursor() as cursor:
+
+            # new debi ici medos!
+
+            cursor.execute("""
+        SELECT USER_ID, ACTION_DATE, ACTION_TYPE
+        FROM (
+            SELECT USER_ID, ACTION_DATE, ACTION_TYPE
+            FROM HISTORIQUE_TRANSFER
+            ORDER BY ACTION_DATE DESC
+        )
+        WHERE ROWNUM = 1
+    """)
+
+            dernier_enregistrement = cursor.fetchone()  # Utiliser fetchone() au lieu de fetchall()
+            print("dernier_enregistrement : ", dernier_enregistrement)
+
+            print("---------------------------------------------------------")
+            if dernier_enregistrement:
+                dernier_user_id = dernier_enregistrement[0]  # Premier élément = USER_ID
+                print("dernier_user_id : ", dernier_user_id)
+            else:
+                print("Aucun enregistrement trouvé")
+                dernier_user_id = None
+
+            print("user_id actuel : ", user_id)
+            print("---------------------------------------------------------")
+
+            if dernier_enregistrement and dernier_user_id == int(user_id):
+                action_type = dernier_enregistrement[2]
+
+                if action_type == 'REJET':
+                    return Response({
+                        'error': 'Vous avez déjà rejeté ce dossier',
+                        'code': 'ACTION_DUPLIQUEE'
+                    }, status=400)
+                else:
+                    return Response({
+                        'error': 'Vous avez déjà validé ce dossier',
+                        'code': 'ACTION_DUPLIQUEE'
+                    }, status=400)
+
+            # fin update ici medos
+
             # Vérifier si l'utilisateur a déjà donné son avis sur ce transfert
             cursor.execute("""
-                SELECT COUNT(*) 
-                FROM HISTORIQUE_TRANSFER 
+                SELECT COUNT(*)
+                FROM HISTORIQUE_TRANSFER
                 WHERE TRANSFER_ID = :transfer_id AND USER_ID = :user_id AND ACTION_TYPE = 'REJET'
             """, {
                 'transfer_id': int(transfer_id),
                 'user_id': int(user_id)
             })
             existing_rejection_count = cursor.fetchone()[0]
-            
+
             # Vérifier si le transfert a déjà été approuvé après le dernier rejet
             cursor.execute("""
-                SELECT COUNT(*) 
-                FROM HISTORIQUE_TRANSFER 
+                SELECT COUNT(*)
+                FROM HISTORIQUE_TRANSFER
                 WHERE TRANSFER_ID = :transfer_id AND ACTION_TYPE = 'APPROBATION'
             """, {'transfer_id': int(transfer_id)})
             existing_approval_count = cursor.fetchone()[0]
-            
+
             # Bloquer si l'utilisateur a déjà rejeté ET que le transfert n'a jamais été approuvé après
             if existing_rejection_count > 0 and existing_approval_count == 0:
                 return Response({
@@ -1551,23 +1655,23 @@ def reject_transfer(request, transfer_id):
             user_row = cursor.fetchone()
             if not user_row:
                 return Response({'error': 'Utilisateur non trouvé'}, status=404)
-            
+
             poid = user_row[0]
             rejecter_name = user_row[1] if user_row[1] else user_row[2]
-            
+
             # Récupérer les informations actuelles du transfert et du créateur
             cursor.execute("""
-                SELECT t.PLAFOND, t.CURRENT_APPROVAL_LEVEL, t.REF_FAC, t.CREATED_BY, 
+                SELECT t.PLAFOND, t.CURRENT_APPROVAL_LEVEL, t.REF_FAC, t.CREATED_BY,
                        u.EMAIL, u.FULLNAME, u.USERNAME, u.BRANCH_CODE
                 FROM TRANSFER t
                 LEFT JOIN AM_USERS_LOCAL u ON t.CREATED_BY = u.ID
                 WHERE t.ID_TRANSFER = :transfer_id
             """, {'transfer_id': int(transfer_id)})
             transfer_row = cursor.fetchone()
-            
+
             if not transfer_row:
                 return Response({'error': 'Transfert non trouvé'}, status=404)
-                
+
             plafond = transfer_row[0] or 0
             current_approval_level = transfer_row[1] or 0
             ref_fac = transfer_row[2]
@@ -1575,19 +1679,19 @@ def reject_transfer(request, transfer_id):
             creator_email = transfer_row[4]  # Peut être None
             creator_name = transfer_row[5] if transfer_row[5] else (transfer_row[6] if transfer_row[6] else "Utilisateur")
             creator_branch = transfer_row[7]  # Agence du créateur
-            
+
             # Si l'email du créateur n'est pas disponible, chercher un administrateur ou responsable
             if not creator_email:
                 print("Email du créateur non trouvé, recherche d'un administrateur...")
-                
+
                 # Chercher un utilisateur avec un rôle spécifique (par exemple POID = 99 pour les admins)
                 cursor.execute("""
-                    SELECT EMAIL, FULLNAME, USERNAME 
-                    FROM AM_USERS_LOCAL 
+                    SELECT EMAIL, FULLNAME, USERNAME
+                    FROM AM_USERS_LOCAL
                     WHERE POID = 99 AND BRANCH_CODE = :branch_code
                     AND ROWNUM = 1
                 """, {'branch_code': creator_branch})
-                
+
                 admin_row = cursor.fetchone()
                 if admin_row:
                     creator_email = admin_row[0]
@@ -1596,12 +1700,12 @@ def reject_transfer(request, transfer_id):
                 else:
                     # Si aucun admin n'est trouvé, chercher n'importe quel utilisateur de la même agence
                     cursor.execute("""
-                        SELECT EMAIL, FULLNAME, USERNAME 
-                        FROM AM_USERS_LOCAL 
+                        SELECT EMAIL, FULLNAME, USERNAME
+                        FROM AM_USERS_LOCAL
                         WHERE BRANCH_CODE = :branch_code AND EMAIL IS NOT NULL
                         AND ROWNUM = 1
                     """, {'branch_code': creator_branch})
-                    
+
                     user_row = cursor.fetchone()
                     if user_row:
                         creator_email = user_row[0]
@@ -1609,7 +1713,7 @@ def reject_transfer(request, transfer_id):
                         print(f"Utilisateur de l'agence trouvé: {creator_email}")
                     else:
                         print("Aucun utilisateur trouvé pour notifier")
-            
+
             # Calculer le nouveau plafond selon la logique spécifique
             new_plafond = 0
             if plafond == 4:
@@ -1626,18 +1730,18 @@ def reject_transfer(request, transfer_id):
                 new_plafond = 128
             else:
                 new_plafond = plafond - poid
-            
+
             # Décrémenter le niveau d'approbation (mais pas en dessous de 1)
-            new_approval_level = max(1, current_approval_level - 1)
-            
+            new_approval_level = max(0, current_approval_level - 1)
+
             # Le statut reste toujours EN_ATTENTE pour un rejet
             status = 'EN_ATTENTE'
-            
+
             # Mettre à jour le transfert (on modifie le plafond cette fois)
             cursor.execute("""
-                UPDATE TRANSFER 
-                SET observation = :observation, 
-                    current_approval_level = :new_approval_level, 
+                UPDATE TRANSFER
+                SET observation = :observation,
+                    current_approval_level = :new_approval_level,
                     status = :status,
                     PLAFOND = :new_plafond
                 WHERE ID_TRANSFER = :transfer_id
@@ -1666,7 +1770,7 @@ def reject_transfer(request, transfer_id):
                     'status': status
                 }
             )
-            
+
             # Envoyer un email de notification si un destinataire a été trouvé
             if creator_email:
                 try:
@@ -1685,9 +1789,9 @@ def reject_transfer(request, transfer_id):
                     traceback.print_exc()
             else:
                 print("Aucun email de destinataire trouvé, impossible d'envoyer la notification")
-            
+
             connection.commit()
-        
+
         return Response({
             'success': True,
             'transfer_id': transfer_id,
@@ -1712,17 +1816,20 @@ def send_rejection_email(creator_email, ref_fac, creator_name, rejecter_name, ob
         f"Merci de vous connecter à la plateforme pour plus de détails.\n\n"
         f"Cordialement,\n"
     )
-    
+
     # Afficher le contenu de l'email pour le débogage
     print(f"Contenu de l'email:\nSujet: {subject}\nMessage: {message}")
-    
+
     send_mail(
         subject=subject,
         message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[creator_email],
         fail_silently=False,
-    ) 
+    )
+
+
+
 
 # fin function par medos
 @api_view(['GET'])

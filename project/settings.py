@@ -117,9 +117,9 @@ DATABASES = {
     },
     'PROD': {
         'ENGINE': 'django.db.backends.oracle',
-        'NAME': os.environ.get('DATABASE_NAME'),
-        'USER': os.environ.get('DATABASE_USER'),
-        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
+        'NAME': os.environ.get('DATABASE_NAME_P'),
+        'USER': os.environ.get('DATABASE_USER_P'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD_P'),
     }
 }
 

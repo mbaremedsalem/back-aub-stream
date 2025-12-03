@@ -126,7 +126,8 @@ class entetPostView(APIView):
                     pr.CLIPRT AS client,
                     c.NOM,
                     c.compte,
-                    COUNT(*) AS duree_mourabaha,
+                    TRUNC(MONTHS_BETWEEN(derndat, datdep)) AS duree_mourabaha,
+
                     pr.txtaxe AS TOF
                 FROM 
                     PRTCLI_LOCAL pr
@@ -136,6 +137,7 @@ class entetPostView(APIView):
                     CPT_LOCAL c ON pr.CLIPRT = c.CLIENT AND c.ncg IN ('210001','210101','210201','210301')
                 WHERE 
                     pr.cliprt = %s AND pr.nooper = %s
+                    AND pr.VALIDE<>'A'
                 GROUP BY 
                     pr.nooper,
                     pr.datdep,
@@ -146,7 +148,9 @@ class entetPostView(APIView):
                     pr.CLIPRT,
                     c.NOM,
                     c.compte,
-                    pr.txtaxe
+                    pr.txtaxe,
+                    pr.derndat
+                    
             """
 
             with connection.cursor() as cursor:

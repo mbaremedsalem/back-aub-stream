@@ -125,6 +125,15 @@ urlpatterns = [
     ###### ------- objectif -------######"
     path('objectives/list/', get_objectives_list, name='get_objectives_list'),
     path('objectives/assign/', assign_objectives, name='assign_objectives'),
+    path('comptes/depot/', comptes_negatifs_api_safe, name='comptes_negatifs_api'),
+    
+    ###### ------ statistique ------######
+    # APIs de statistiques
+    path('statistics/objectives/', get_objectives_statistics, name='get_objectives_statistics'),
+    path('statistics/user/', get_user_statistics, name='get_user_statistics'),
+    path('statistics/user/<str:user_id>/', get_user_statistics, name='get_user_statistics_by_id'),
+    path('statistics/comparison/', get_comparison_statistics, name='get_comparison_statistics'),
+    path('statistics/dashboard/', get_dashboard_stats, name='get_dashboard_stats'),
     ##### ----- periode ----- #######
     path('periods/create/', create_period, name='create_period'),
     path('periods/list/', get_periods, name='get_periods'),
