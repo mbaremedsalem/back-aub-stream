@@ -143,6 +143,10 @@ urlpatterns = [
     path('task-types/create/', create_task_type, name='create_task_type'),
     path('task-types/list/', get_task_types, name='get_task_types'),
     path('api/task-types/create-bulk/', create_task_types_bulk, name='create_task_types_bulk'),
+    ##### -------- delete and update taske ------------------
+    path('task-types/<str:task_type_id>/delete/', delete_task_type, name='delete_task_type'),
+    path('task-types/<str:task_type_id>/update/', update_task_type, name='update_task_type'),
+    
 
     #####----- APIs de suppression -------- ########
     # APIs TRUNCATE individuelles

@@ -904,6 +904,206 @@ def get_task_types(request):
             'error': str(e)
         }, status=500)
 
+#----- delete taske 
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_task_type(request, task_type_id):
+    try:
+        # Vérifier si l'ID est valide
+        if not task_type_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Task type ID is required'
+            }, status=400)
+        
+        with connection.cursor() as cursor:
+            # Vérifier d'abord si la tâche existe
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM AM_OBJECTIVE_TYPES 
+                WHERE TASK_TYPE_ID = :id
+            """, {'id': task_type_id})
+            
+            if cursor.fetchone()[0] == 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Task type with ID {task_type_id} not found'
+                }, status=404)
+            
+            # Supprimer la tâche
+            cursor.execute("""
+                DELETE FROM AM_OBJECTIVE_TYPES 
+                WHERE TASK_TYPE_ID = :id
+            """, {'id': task_type_id})
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Task type with ID {task_type_id} deleted successfully'
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+#-------- update taske --------------
+@csrf_exempt
+@require_http_methods(["PUT", "PATCH"])
+def update_task_type(request, task_type_id):
+    try:
+        # Vérifier si l'ID est valide
+        if not task_type_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Task type ID is required'
+            }, status=400)
+        
+        # Lire les données de la requête
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data'
+            }, status=400)
+        
+        # Vérifier les champs obligatoires
+        if 'TASK_NAME' not in data:
+            return JsonResponse({
+                'success': False,
+                'error': 'TASK_NAME is required'
+            }, status=400)
+        
+        with connection.cursor() as cursor:
+            # Vérifier d'abord si la tâche existe
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM AM_OBJECTIVE_TYPES 
+                WHERE TASK_TYPE_ID = :id
+            """, {'id': task_type_id})
+            
+            if cursor.fetchone()[0] == 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Task type with ID {task_type_id} not found'
+                }, status=404)
+            
+            # Vérifier les colonnes existantes dans la table
+            cursor.execute("""
+                SELECT column_name 
+                FROM user_tab_columns 
+                WHERE table_name = 'AM_OBJECTIVE_TYPES' 
+                ORDER BY column_id
+            """)
+            existing_columns = [row[0] for row in cursor.fetchall()]
+            print(f"Colonnes existantes: {existing_columns}")  # Pour debug
+            
+            # Préparer les données de mise à jour
+            update_fields = []
+            update_values = {'id': task_type_id}
+            
+            # Champs de base toujours présents
+            base_fields = ['TASK_NAME', 'TASK_DESCRIPTION', 'UNIT_MEASURE']
+            
+            # Construire la liste des champs autorisés en fonction des colonnes existantes
+            allowed_fields = []
+            for field in base_fields:
+                if field in existing_columns:
+                    allowed_fields.append(field)
+            
+            # Ajouter les champs optionnels seulement s'ils existent dans la table
+            optional_fields = ['UPDATED_DATE', 'UPDATED_BY']
+            for field in optional_fields:
+                if field in existing_columns:
+                    allowed_fields.append(field)
+            
+            print(f"Champs autorisés pour mise à jour: {allowed_fields}")  # Pour debug
+            
+            # Construire la requête de mise à jour dynamiquement
+            param_index = 1
+            for field in allowed_fields:
+                if field in data:
+                    param_name = f"val{param_index}"
+                    update_fields.append(f"{field} = :{param_name}")
+                    update_values[param_name] = data[field]
+                    param_index += 1
+            
+            # Si aucun champ à mettre à jour
+            if not update_fields:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No valid fields to update'
+                }, status=400)
+            
+            # Ajouter la date de mise à jour automatiquement si la colonne existe
+            # ET si elle n'a pas été fournie dans les données
+            if 'UPDATED_DATE' in existing_columns and 'UPDATED_DATE' not in data:
+                update_fields.append("UPDATED_DATE = SYSDATE")
+            
+            # Construire et exécuter la requête SQL
+            sql = f"""
+                UPDATE AM_OBJECTIVE_TYPES 
+                SET {', '.join(update_fields)}
+                WHERE TASK_TYPE_ID = :id
+            """
+            
+            print(f"SQL: {sql}")  # Pour debug
+            print(f"Valeurs: {update_values}")  # Pour debug
+            
+            cursor.execute(sql, update_values)
+            
+            # Construire dynamiquement la requête SELECT pour récupérer les données mises à jour
+            select_columns = ['TASK_TYPE_ID', 'TASK_NAME', 'TASK_DESCRIPTION', 'UNIT_MEASURE']
+            
+            # Ajouter les colonnes optionnelles si elles existent
+            optional_select_columns = ['CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY']
+            for col in optional_select_columns:
+                if col in existing_columns:
+                    select_columns.append(col)
+            
+            select_sql = f"""
+                SELECT {', '.join(select_columns)}
+                FROM AM_OBJECTIVE_TYPES 
+                WHERE TASK_TYPE_ID = :id
+            """
+            
+            cursor.execute(select_sql, {'id': task_type_id})
+            
+            columns = [col[0] for col in cursor.description]
+            result = cursor.fetchone()
+            
+            if result:
+                updated_task = dict(zip(columns, result))
+                
+                # Convertir les dates en string pour JSON
+                for key, value in updated_task.items():
+                    if value is not None and hasattr(value, 'isoformat'):
+                        updated_task[key] = value.isoformat()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Task type with ID {task_type_id} updated successfully',
+                    'task_type': updated_task
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to retrieve updated task'
+                }, status=500)
+            
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Erreur détaillée: {error_details}")  # Pour debug
+        
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'details': "Vérifiez les colonnes de la table AM_OBJECTIVE_TYPES"
+        }, status=500)
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_task_types_bulk(request):
@@ -1844,6 +2044,7 @@ def comptes_negatifs_api_safe(request):
             (select libelle from ncglib b where b.ncg = c.ncg) Produit_compte,
             c.datouv date_ouverture,
             c.datfrm date_fermeture,
+            c.expl ,
             s.posdev Solde,
             (select sum(t.mntdev) from mvtc t  
              where t.compte = c.compte 
